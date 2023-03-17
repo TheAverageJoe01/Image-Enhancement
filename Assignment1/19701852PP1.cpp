@@ -54,7 +54,7 @@ int main(int argc, char** argv) {
 		if (bin_num >= 0 && bin_num <= 256) { break; }
 		else { std::cout << "Please enter a number in range 0-256." << "\n"; continue; }
 	}
-	float binSize = (float)256 / (float)bin_num;
+	double binSize = (double)256 / (double)bin_num;
 
 	//detect any potential exceptions
 	try {
@@ -92,7 +92,7 @@ int main(int argc, char** argv) {
 		std::cout << "Runing on " << GetPlatformName(platform_id) << ", " << GetDeviceName(platform_id, device_id) << std::endl;
 
 		//create a queue to which we will push commands for the device
-		cl::CommandQueue queue(context);
+		cl::CommandQueue queue(context, CL_QUEUE_PROFILING_ENABLE);
 
 		//Load & build the device code
 		cl::Program::Sources sources;
@@ -128,16 +128,19 @@ int main(int argc, char** argv) {
 		cl::Buffer dev_look_buffer(context, CL_MEM_READ_WRITE, hist_size);
 
 		queue.enqueueWriteBuffer(dev_image_input, CL_TRUE, 0, imageInput.size() * sizeof(imageInput[0]), &imageInput.data()[0]);
-		queue.enqueueWriteBuffer(dev_binSize_buffer, CL_TRUE, 0, sizeof(binSize), &binSize);
+		queue.enqueueWriteBuffer(dev_binSize_buffer, CL_TRUE, 0, imageInput.size(), &binSize);
 
+		// Histogram
 		cl::Kernel Hist = cl::Kernel(program, "hist_simple");
 		Hist.setArg(0, dev_image_input);
 		Hist.setArg(1, dev_hist_buffer);
 		Hist.setArg(2, dev_binSize_buffer);
 
-		queue.enqueueNDRangeKernel(Hist, cl::NullRange, cl::NDRange(imageInput.size()), cl::NullRange, NULL);
+		cl::Event histogramEvent;
+
+		queue.enqueueNDRangeKernel(Hist, cl::NullRange, cl::NDRange(imageInput.size()), cl::NullRange, NULL, &histogramEvent);
 		queue.enqueueReadBuffer(dev_hist_buffer, CL_TRUE, 0, hist_size, &H[0]);
-		std::cout << std::endl << H << std::endl;
+		
 
 		//cumalative hist
 		cl::Kernel cumHist = cl::Kernel(program, "scan_add");
@@ -146,9 +149,11 @@ int main(int argc, char** argv) {
 		cumHist.setArg(2, cl::Local(hist_size));
 		cumHist.setArg(3, cl::Local(hist_size));
 
-		queue.enqueueNDRangeKernel(cumHist, cl::NullRange, cl::NDRange(H.size()), cl::NullRange, NULL);
+		cl::Event cumHistevent;
+
+		queue.enqueueNDRangeKernel(cumHist, cl::NullRange, cl::NDRange(H.size()), cl::NullRange, NULL, &cumHistevent);
 		queue.enqueueReadBuffer(dev_cum_buffer, CL_TRUE, 0, hist_size, &CH[0]);
-		std::cout << std::endl << CH << std::endl;
+		
 
 		//lookupTable
 		cl::Kernel lookUp = cl::Kernel(program, "lookupTable");
@@ -156,19 +161,22 @@ int main(int argc, char** argv) {
 		lookUp.setArg(1, dev_look_buffer);
 		lookUp.setArg(2, Bit);
 
+		cl::Event lookupEvent;
 
-		queue.enqueueNDRangeKernel(lookUp, cl::NullRange, cl::NDRange(H.size()), cl::NullRange, NULL);
+		queue.enqueueNDRangeKernel(lookUp, cl::NullRange, cl::NDRange(H.size()), cl::NullRange, NULL, &lookupEvent);
 		queue.enqueueReadBuffer(dev_look_buffer, CL_TRUE, 0, hist_size, &L[0]);
-		std::cout << std::endl << L << std::endl;
+		
 
 		//BackProjection 
 		cl::Kernel backprojection = cl::Kernel(program, "backprojection");
 		backprojection.setArg(0, dev_image_input);
 		backprojection.setArg(1, dev_look_buffer);
 		backprojection.setArg(2, dev_image_output);
+		backprojection.setArg(3, binSize);
 
+		cl::Event backprojEvent;
 
-		queue.enqueueNDRangeKernel(backprojection, cl::NullRange, cl::NDRange(imageInput.size()), cl::NullRange, NULL);
+		queue.enqueueNDRangeKernel(backprojection, cl::NullRange, cl::NDRange(imageInput.size()), cl::NullRange, NULL,&backprojEvent);
 		queue.enqueueReadBuffer(dev_image_output, CL_TRUE, 0, imageInput.size() * sizeof(imageInput[0]), &BP.data()[0]);
 
 		//
@@ -187,6 +195,25 @@ int main(int argc, char** argv) {
 			}
 			imageOutput = RGB_image.get_YCbCrtoRGB();
 		}
+		//outputs
+		std::cout << std::endl;
+		std::cout << std::endl << H << std::endl;
+		std::cout << "Histogram kernal time (ns):" << histogramEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - histogramEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
+		std::cout << "Hist Memory transfer:" << GetFullProfilingInfo(histogramEvent, ProfilingResolution::PROF_US) << std::endl << std::endl;
+
+		std::cout << std::endl << CH << std::endl;
+		std::cout << "Cum Histogram kernal time (ns):" << cumHistevent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - cumHistevent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
+		std::cout << "Cum Hist Memory transfer:" << GetFullProfilingInfo(cumHistevent, ProfilingResolution::PROF_US) << std::endl << std::endl;
+
+		std::cout << std::endl << L << std::endl;
+		std::cout << "LookUpTable kernal time (ns):" << lookupEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - lookupEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
+		std::cout << "LookUpTable Memory transfer:" << GetFullProfilingInfo(lookupEvent, ProfilingResolution::PROF_US) << std::endl << std::endl;
+
+		std::cout << "Backprojection kernal time (ns):" << backprojEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - backprojEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
+		std::cout << "Backprojection Memory transfer:" << GetFullProfilingInfo(backprojEvent, ProfilingResolution::PROF_US) << std::endl << std::endl;
+
+		std::cout << "Overall kernal time (ns):" << backprojEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - histogramEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
+
 
 		// Display the final equalised image
 		CImgDisplay disp_output(imageOutput, "output");
