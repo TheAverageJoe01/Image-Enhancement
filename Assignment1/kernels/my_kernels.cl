@@ -54,7 +54,7 @@ kernel void lookupTable(global int* A, global int* B, const int maxIntensity, in
 }
 
 // Back-project each output pixel by indexing the look-up table with the original intensity level
-kernel void backprojection(global uchar* A, global int* LUT, global uchar* B, double binSize) 
+kernel void backprojection(global uchar* A, global int* LUT, global uchar* B, float binSize) 
 {
     // Get the global ID of the current item and store it in a variable
     int globalID = get_global_id(0);

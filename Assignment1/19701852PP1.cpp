@@ -22,7 +22,7 @@ int main(int argc, char** argv) {
 	//handle command line options such as device selection, verbosity, etc.
 	int platform_id = 0;
 	int device_id = 0;
-	string imageName = "images/test.ppm";
+	string imageName = "images/test.pgm";
 	bool isRGB;
 
 	for (int i = 1; i < argc; i++) {
@@ -54,7 +54,7 @@ int main(int argc, char** argv) {
 		if (bin_num >= 0 && bin_num <= 256) { break; }
 		else { std::cout << "Please enter a number in range 0-256." << "\n"; continue; }
 	}
-	double binSize = (Bit + 1) / bin_num;
+	float binSize = (Bit + 1) / bin_num;
 
 	//detect any potential exceptions
 	try {
@@ -139,6 +139,7 @@ int main(int argc, char** argv) {
 
 		queue.enqueueNDRangeKernel(Hist, cl::NullRange, cl::NDRange(imageInput.size()), cl::NullRange, NULL, &histogramEvent);
 		queue.enqueueReadBuffer(dev_hist_buffer, CL_TRUE, 0, hist_size, &H[0]);
+		std::cout << "Hist done" << std::endl;
 
 		//cumalative hist
 		cl::Kernel cumHist = cl::Kernel(program, "scan_add");
@@ -151,6 +152,7 @@ int main(int argc, char** argv) {
 
 		queue.enqueueNDRangeKernel(cumHist, cl::NullRange, cl::NDRange(H.size()), cl::NullRange, NULL, &cumHistevent);
 		queue.enqueueReadBuffer(dev_cum_buffer, CL_TRUE, 0, hist_size, &CH[0]);
+		std::cout << "Cum Hist done" << std::endl;
 
 		//lookupTable
 		cl::Kernel lookUp = cl::Kernel(program, "lookupTable");
@@ -163,6 +165,7 @@ int main(int argc, char** argv) {
 
 		queue.enqueueNDRangeKernel(lookUp, cl::NullRange, cl::NDRange(H.size()), cl::NullRange, NULL, &lookupEvent);
 		queue.enqueueReadBuffer(dev_look_buffer, CL_TRUE, 0, hist_size, &L[0]);
+		std::cout << "LUT done" << std::endl;
 
 		//BackProjection 
 		cl::Kernel backprojection = cl::Kernel(program, "backprojection");
@@ -175,6 +178,7 @@ int main(int argc, char** argv) {
 
 		queue.enqueueNDRangeKernel(backprojection, cl::NullRange, cl::NDRange(imageInput.size()), cl::NullRange, NULL, &backprojEvent);
 		queue.enqueueReadBuffer(dev_image_output, CL_TRUE, 0, imageInput.size() * sizeof(imageInput[0]), &BP.data()[0]);
+		std::cout << "back Proj done" << std::endl;
 
 		//
 		CImg<unsigned char> imageOutput(BP.data(), imageInput.width(), imageInput.height(), imageInput.depth(), imageInput.spectrum());
