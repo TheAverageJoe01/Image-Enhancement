@@ -54,7 +54,7 @@ int main(int argc, char** argv) {
 		if (bin_num >= 0 && bin_num <= 256) { break; }
 		else { std::cout << "Please enter a number in range 0-256." << "\n"; continue; }
 	}
-	double binSize = (double)256 / (double)bin_num;
+	double binSize = (Bit + 1) / bin_num;
 
 	//detect any potential exceptions
 	try {
@@ -128,9 +128,8 @@ int main(int argc, char** argv) {
 		cl::Buffer dev_look_buffer(context, CL_MEM_READ_WRITE, hist_size);
 
 		queue.enqueueWriteBuffer(dev_image_input, CL_TRUE, 0, imageInput.size() * sizeof(imageInput[0]), &imageInput.data()[0]);
-		queue.enqueueWriteBuffer(dev_binSize_buffer, CL_TRUE, 0, imageInput.size(), &binSize);
+		queue.enqueueWriteBuffer(dev_binSize_buffer, CL_TRUE, 0, sizeof(binSize), &binSize);
 
-		// Histogram
 		cl::Kernel Hist = cl::Kernel(program, "hist_simple");
 		Hist.setArg(0, dev_image_input);
 		Hist.setArg(1, dev_hist_buffer);
@@ -140,7 +139,6 @@ int main(int argc, char** argv) {
 
 		queue.enqueueNDRangeKernel(Hist, cl::NullRange, cl::NDRange(imageInput.size()), cl::NullRange, NULL, &histogramEvent);
 		queue.enqueueReadBuffer(dev_hist_buffer, CL_TRUE, 0, hist_size, &H[0]);
-		
 
 		//cumalative hist
 		cl::Kernel cumHist = cl::Kernel(program, "scan_add");
@@ -153,19 +151,18 @@ int main(int argc, char** argv) {
 
 		queue.enqueueNDRangeKernel(cumHist, cl::NullRange, cl::NDRange(H.size()), cl::NullRange, NULL, &cumHistevent);
 		queue.enqueueReadBuffer(dev_cum_buffer, CL_TRUE, 0, hist_size, &CH[0]);
-		
 
 		//lookupTable
 		cl::Kernel lookUp = cl::Kernel(program, "lookupTable");
 		lookUp.setArg(0, dev_cum_buffer);
 		lookUp.setArg(1, dev_look_buffer);
 		lookUp.setArg(2, Bit);
+		lookUp.setArg(3, bin_num);
 
 		cl::Event lookupEvent;
 
 		queue.enqueueNDRangeKernel(lookUp, cl::NullRange, cl::NDRange(H.size()), cl::NullRange, NULL, &lookupEvent);
 		queue.enqueueReadBuffer(dev_look_buffer, CL_TRUE, 0, hist_size, &L[0]);
-		
 
 		//BackProjection 
 		cl::Kernel backprojection = cl::Kernel(program, "backprojection");
@@ -176,7 +173,7 @@ int main(int argc, char** argv) {
 
 		cl::Event backprojEvent;
 
-		queue.enqueueNDRangeKernel(backprojection, cl::NullRange, cl::NDRange(imageInput.size()), cl::NullRange, NULL,&backprojEvent);
+		queue.enqueueNDRangeKernel(backprojection, cl::NullRange, cl::NDRange(imageInput.size()), cl::NullRange, NULL, &backprojEvent);
 		queue.enqueueReadBuffer(dev_image_output, CL_TRUE, 0, imageInput.size() * sizeof(imageInput[0]), &BP.data()[0]);
 
 		//
@@ -195,6 +192,7 @@ int main(int argc, char** argv) {
 			}
 			imageOutput = RGB_image.get_YCbCrtoRGB();
 		}
+
 		//outputs
 		std::cout << std::endl;
 		std::cout << std::endl << H << std::endl;
@@ -213,7 +211,6 @@ int main(int argc, char** argv) {
 		std::cout << "Backprojection Memory transfer:" << GetFullProfilingInfo(backprojEvent, ProfilingResolution::PROF_US) << std::endl << std::endl;
 
 		std::cout << "Overall kernal time (ns):" << backprojEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - histogramEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
-
 
 		// Display the final equalised image
 		CImgDisplay disp_output(imageOutput, "output");

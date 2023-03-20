@@ -1,5 +1,3 @@
-
-
 //a simple OpenCL kernel which copies all pixels from A to B
 kernel void Image1(global const unsigned char* A, global unsigned char* B) {
 	int id = get_global_id(0);
@@ -47,20 +45,21 @@ kernel void scan_add(__global const int* A, global int* B, local int* scratch_1,
 }
 
 // Store the normalised cumulative histogram to a look-up table for mapping the original intensities onto the output image
-kernel void lookupTable(global int* A, global int* B, const int maxIntensity, int bin_size) {
+kernel void lookupTable(global int* A, global int* B, const int maxIntensity, int bin_num) {
     // Get the global ID of the current item and store it in a variable
     int globalID = get_global_id(0);
 
     // Calculate the value for the output
-    B[globalID] = A[globalID] * (double)maxIntensity / A[bin_size -1];
+    B[globalID] = A[globalID] * (double)maxIntensity / A[bin_num -1];
 }
 
 // Back-project each output pixel by indexing the look-up table with the original intensity level
-kernel void backprojection(global uchar* A, global int* LUT, global uchar* B , double binSize) 
+kernel void backprojection(global uchar* A, global int* LUT, global uchar* B, double binSize) 
 {
     // Get the global ID of the current item and store it in a variable
     int globalID = get_global_id(0);
 	int index = A[globalID] / binSize;
-	B[globalID] = LUT[index];
-	
+
+    // Set the value for the output using the value from the look-up table
+    B[globalID] = LUT[index];
 }
