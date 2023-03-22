@@ -8,6 +8,7 @@
 
 using namespace cimg_library;
 
+// menu for help instructions
 void print_help() {
 	std::cerr << "Application usage:" << std::endl;
 
@@ -19,12 +20,12 @@ void print_help() {
 }
 
 int main(int argc, char** argv) {
-	//handle command line options such as device selection, verbosity, etc.
 	int platform_id = 0;
 	int device_id = 0;
 	string imageName = "images/test.pgm";
 	bool isRGB;
 
+	//handle command line options such as device selection, verbosity, etc.
 	for (int i = 1; i < argc; i++) {
 		if ((strcmp(argv[i], "-p") == 0) && (i < (argc - 1))) { platform_id = atoi(argv[++i]); }
 		else if ((strcmp(argv[i], "-d") == 0) && (i < (argc - 1))) { device_id = atoi(argv[++i]); }
@@ -58,11 +59,14 @@ int main(int argc, char** argv) {
 
 	//detect any potential exceptions
 	try {
-
+		// creates a temp used to for image preparation 
 		CImg<unsigned char> tempImage(imageName.c_str());
+		// creates a variable that is apssed to the histogram equalisation 
 		CImg<unsigned char> imageInput;
+		// displays the input image
 		CImgDisplay disp_input(tempImage, "input");
 
+		// initialising variables to store colours 
 		CImg<unsigned char> cb, cr;
 		// detecting which type of image type is used
 		if (tempImage.spectrum() == 1)
@@ -111,12 +115,13 @@ int main(int argc, char** argv) {
 			std::cout << "Build Log:\t " << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(context.getInfo<CL_CONTEXT_DEVICES>()[0]) << std::endl;
 			throw err;
 		}
-		// setting the bin size using the user input 
+		// making the vectors for the histogram equalisation values
 		typedef int type;
 		std::vector<type> H(bin_num);
 		std::vector<type> CH(bin_num);
 		std::vector<type> L(bin_num);
 		std::vector<unsigned char> BP(imageInput.size());
+		//stores the size of the histogram in bytes 
 		size_t hist_size = H.size() * sizeof(type);
 
 		//Buffers
@@ -127,21 +132,33 @@ int main(int argc, char** argv) {
 		cl::Buffer dev_cum_buffer(context, CL_MEM_READ_WRITE, hist_size);
 		cl::Buffer dev_look_buffer(context, CL_MEM_READ_WRITE, hist_size);
 
+		// writing the data to the correct buffer
 		queue.enqueueWriteBuffer(dev_image_input, CL_TRUE, 0, imageInput.size() * sizeof(imageInput[0]), &imageInput.data()[0]);
 		queue.enqueueWriteBuffer(dev_binSize_buffer, CL_TRUE, 0, sizeof(binSize), &binSize);
 
+		/*
+		* --------------- Histogram ---------------
+		*/
+		// initialises the kernel 
 		cl::Kernel Hist = cl::Kernel(program, "hist_simple");
+		//sets the kernel arguments 
 		Hist.setArg(0, dev_image_input);
 		Hist.setArg(1, dev_hist_buffer);
 		Hist.setArg(2, dev_binSize_buffer);
 
+		// sets an event to profile 
 		cl::Event histogramEvent;
 
+		// add it to the queue 
 		queue.enqueueNDRangeKernel(Hist, cl::NullRange, cl::NDRange(imageInput.size()), cl::NullRange, NULL, &histogramEvent);
+		// reads it to the buffer 
 		queue.enqueueReadBuffer(dev_hist_buffer, CL_TRUE, 0, hist_size, &H[0]);
+		// announces compeltetion
 		std::cout << "Hist done" << std::endl;
 
-		//cumalative hist
+		/*
+		* --------------- Cum Histogram ---------------
+		*/
 		cl::Kernel cumHist = cl::Kernel(program, "scan_add");
 		cumHist.setArg(0, dev_hist_buffer);
 		cumHist.setArg(1, dev_cum_buffer);
@@ -154,7 +171,9 @@ int main(int argc, char** argv) {
 		queue.enqueueReadBuffer(dev_cum_buffer, CL_TRUE, 0, hist_size, &CH[0]);
 		std::cout << "Cum Hist done" << std::endl;
 
-		//lookupTable
+		/*
+		* --------------- Lookup Table ---------------
+		*/
 		cl::Kernel lookUp = cl::Kernel(program, "lookupTable");
 		lookUp.setArg(0, dev_cum_buffer);
 		lookUp.setArg(1, dev_look_buffer);
@@ -167,7 +186,9 @@ int main(int argc, char** argv) {
 		queue.enqueueReadBuffer(dev_look_buffer, CL_TRUE, 0, hist_size, &L[0]);
 		std::cout << "LUT done" << std::endl;
 
-		//BackProjection 
+		/*
+		* --------------- Back Projection ---------------
+		*/
 		cl::Kernel backprojection = cl::Kernel(program, "backprojection");
 		backprojection.setArg(0, dev_image_input);
 		backprojection.setArg(1, dev_look_buffer);
@@ -180,24 +201,33 @@ int main(int argc, char** argv) {
 		queue.enqueueReadBuffer(dev_image_output, CL_TRUE, 0, imageInput.size() * sizeof(imageInput[0]), &BP.data()[0]);
 		std::cout << "back Proj done" << std::endl;
 
-		//
+		/*
+		* --------------- Image Creation ---------------
+		*/
 		CImg<unsigned char> imageOutput(BP.data(), imageInput.width(), imageInput.height(), imageInput.depth(), imageInput.spectrum());
 
-		//RBG Output
+		//RGB Output
 		if (isRGB == true)
 		{
 			CImg <unsigned char> RGB_image = imageOutput.get_resize(tempImage.width(), tempImage.height(), tempImage.depth(), tempImage.spectrum());
-			for (int x = 0; x < tempImage.width(); x++) {
-				for (int y = 0; y < tempImage.height(); y++) {
+			for (int x = 0; x < tempImage.width(); x++) 
+			{
+				// adds colour channels back in 
+				for (int y = 0; y < tempImage.height(); y++) 
+				
+				{
 					RGB_image(x, y, 0) = imageOutput(x, y);
 					RGB_image(x, y, 1) = cb(x, y);
 					RGB_image(x, y, 2) = cr(x, y);
 				}
 			}
+			//converts to RGB
 			imageOutput = RGB_image.get_YCbCrtoRGB();
 		}
 
-		//outputs
+		/*
+		* --------------- Outputs ---------------
+		*/
 		std::cout << std::endl;
 		std::cout << std::endl << H << std::endl;
 		std::cout << "Histogram kernal time (ns):" << histogramEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - histogramEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
