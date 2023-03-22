@@ -159,11 +159,14 @@ int main(int argc, char** argv) {
 		/*
 		* --------------- Cum Histogram ---------------
 		*/
+		//cl::Kernel cumHist = cl::Kernel(program, "scan_bl");
 		cl::Kernel cumHist = cl::Kernel(program, "scan_add");
 		cumHist.setArg(0, dev_hist_buffer);
 		cumHist.setArg(1, dev_cum_buffer);
+		// comment out both to switch between the different kernel functions 
 		cumHist.setArg(2, cl::Local(hist_size));
 		cumHist.setArg(3, cl::Local(hist_size));
+
 
 		cl::Event cumHistevent;
 

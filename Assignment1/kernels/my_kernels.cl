@@ -42,6 +42,39 @@ kernel void scan_add(__global const int* A, global int* B, local int* scratch_1,
 	B[id] = scratch_1[lid];
 }
 
+//Blelloch basic exclusive scan
+kernel void scan_bl(global int* A global int* B) 
+{
+	int id = get_global_id(0);
+	int N = get_global_size(0);
+	int t;
+
+	//up-sweep
+	for (int stride = 1; stride < N; stride *= 2) {
+		if (((id + 1) % (stride*2)) == 0)
+			A[id] += A[id - stride];
+
+		barrier(CLK_GLOBAL_MEM_FENCE); //sync the step
+	}
+
+	//down-sweep
+	if (id == 0)
+		A[N-1] = 0;//exclusive scan
+
+	barrier(CLK_GLOBAL_MEM_FENCE); //sync the step
+
+	for (int stride = N/2; stride > 0; stride /= 2) {
+		if (((id + 1) % (stride*2)) == 0) {
+			t = A[id];
+			A[id] += A[id - stride]; //reduce 
+			A[id - stride] = t;		 //move
+		}
+
+		barrier(CLK_GLOBAL_MEM_FENCE); //sync the step
+	}
+	// copying output data 
+	B[id] = A[id];
+}
 
 kernel void lookupTable(global int* A, global int* B, const int maxIntensity, int bin_num) 
 {
