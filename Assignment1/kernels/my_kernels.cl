@@ -1,5 +1,5 @@
 
-kernel void hist_simple(global const unsigned char* A, global int* B, global const float* C) 
+kernel void hist_simple(global const unsigned short* A, global int* B, global const float* C) 
 {
 	int id = get_global_id(0);
 
@@ -38,12 +38,13 @@ kernel void scan_add(__global const int* A, global int* B, local int* scratch_1,
 		scratch_1 = scratch_3;
 	}
 
+	barrier(CLK_LOCAL_MEM_FENCE);
 	//copying output data to global memory 
 	B[id] = scratch_1[lid];
 }
 
 //Blelloch basic exclusive scan
-kernel void scan_bl(global int* A global int* B) 
+kernel void scan_bl(global int* A, global int* B) 
 {
 	int id = get_global_id(0);
 	int N = get_global_size(0);
@@ -85,7 +86,7 @@ kernel void lookupTable(global int* A, global int* B, const int maxIntensity, in
 }
 
 
-kernel void backprojection(global uchar* A, global int* LUT, global uchar* B, float binSize) 
+kernel void backprojection(global ushort* A, global int* LUT, global ushort* B, float binSize) 
 {
     int globalID = get_global_id(0);
 	int index = A[globalID] / binSize;

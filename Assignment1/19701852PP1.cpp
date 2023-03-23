@@ -7,7 +7,24 @@
 #include <vector>
 
 using namespace cimg_library;
+typedef int type;
+typedef unsigned short imageType;
 
+CImgDisplay displayImage(CImg<imageType>imageDisplay, int bitDepth)
+{
+	if (bitDepth == 16) {
+		CImg<unsigned short> image2 = (CImg<imageType>) imageDisplay;
+		CImgDisplay outputImageDisplay(image2, "16 Bit Image");
+		return outputImageDisplay;
+	}
+
+	else {
+		CImg<unsigned char> image2 = (CImg<imageType>) imageDisplay;
+		CImgDisplay outputImageDisplay(image2, "8 Bit Image");
+		std::cout << "fuck this module" << std::endl;
+		return outputImageDisplay;
+	}
+}
 // menu for help instructions
 void print_help() {
 	std::cerr << "Application usage:" << std::endl;
@@ -22,7 +39,7 @@ void print_help() {
 int main(int argc, char** argv) {
 	int platform_id = 0;
 	int device_id = 0;
-	string imageName = "images/test.pgm";
+	string imageName = "images/test_large.pgm";
 	bool isRGB;
 
 	//handle command line options such as device selection, verbosity, etc.
@@ -39,7 +56,8 @@ int main(int argc, char** argv) {
 	// taking in user input to create bin size
 	string userCommand;
 	int bin_num = 10;
-	int Bit = 255;
+	int bitDepth;
+	int maxDepth = 255;
 	std::cout << "Enter a bin number in range 0-256" << "\n";
 	// while the user hasn't entered a valid number the program will keep running
 	while (true)
@@ -55,19 +73,31 @@ int main(int argc, char** argv) {
 		if (bin_num >= 0 && bin_num <= 256) { break; }
 		else { std::cout << "Please enter a number in range 0-256." << "\n"; continue; }
 	}
-	float binSize = (Bit + 1) / bin_num;
 
 	//detect any potential exceptions
 	try {
 		// creates a temp used to for image preparation 
-		CImg<unsigned char> tempImage(imageName.c_str());
+		CImg<unsigned short> tempImage(imageName.c_str());
 		// creates a variable that is apssed to the histogram equalisation 
-		CImg<unsigned char> imageInput;
-		// displays the input image
-		CImgDisplay disp_input(tempImage, "input");
+		CImg<unsigned short> imageInput;
+
+		if (tempImage.max() <= 255)
+		{
+			bitDepth = 8;
+			maxDepth = 255;
+		}
+		else if (tempImage.max() <= 65535)
+		{
+			bitDepth = 16;
+			maxDepth = 65535;
+		}
+		float binSize = (maxDepth + 1) / bin_num;
+		CImgDisplay disp_input = displayImage(tempImage, bitDepth);
+
+
 
 		// initialising variables to store colours 
-		CImg<unsigned char> cb, cr;
+		CImg<unsigned short> cb, cr;
 		// detecting which type of image type is used
 		if (tempImage.spectrum() == 1)
 		{
@@ -80,7 +110,7 @@ int main(int argc, char** argv) {
 			std::cout << "Image is an RGB" << std::endl;
 			isRGB = true;
 			//Converting RBG to Ycbcr
-			CImg<unsigned char> YcbcrIMG = tempImage.get_RGBtoYCbCr();
+			CImg<unsigned short> YcbcrIMG = tempImage.get_RGBtoYCbCr();
 			//extract channels 
 			imageInput = YcbcrIMG.get_channel(0);
 			cb = YcbcrIMG.get_channel(1);
@@ -116,11 +146,10 @@ int main(int argc, char** argv) {
 			throw err;
 		}
 		// making the vectors for the histogram equalisation values
-		typedef int type;
 		std::vector<type> H(bin_num);
 		std::vector<type> CH(bin_num);
 		std::vector<type> L(bin_num);
-		std::vector<unsigned char> BP(imageInput.size());
+		std::vector<unsigned short> BP(imageInput.size());
 		//stores the size of the histogram in bytes 
 		size_t hist_size = H.size() * sizeof(type);
 
@@ -180,7 +209,7 @@ int main(int argc, char** argv) {
 		cl::Kernel lookUp = cl::Kernel(program, "lookupTable");
 		lookUp.setArg(0, dev_cum_buffer);
 		lookUp.setArg(1, dev_look_buffer);
-		lookUp.setArg(2, Bit);
+		lookUp.setArg(2, maxDepth + 1);
 		lookUp.setArg(3, bin_num);
 
 		cl::Event lookupEvent;
@@ -207,12 +236,12 @@ int main(int argc, char** argv) {
 		/*
 		* --------------- Image Creation ---------------
 		*/
-		CImg<unsigned char> imageOutput(BP.data(), imageInput.width(), imageInput.height(), imageInput.depth(), imageInput.spectrum());
+		CImg<imageType> imageOutput(BP.data(), imageInput.width(), imageInput.height(), imageInput.depth(), imageInput.spectrum());
 
 		//RGB Output
 		if (isRGB == true)
 		{
-			CImg <unsigned char> RGB_image = imageOutput.get_resize(tempImage.width(), tempImage.height(), tempImage.depth(), tempImage.spectrum());
+			CImg <imageType> RGB_image = imageOutput.get_resize(tempImage.width(), tempImage.height(), tempImage.depth(), tempImage.spectrum());
 			for (int x = 0; x < tempImage.width(); x++) 
 			{
 				// adds colour channels back in 
@@ -250,7 +279,7 @@ int main(int argc, char** argv) {
 		std::cout << "Overall kernal time (ns):" << backprojEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - histogramEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
 
 		// Display the final equalised image
-		CImgDisplay disp_output(imageOutput, "output");
+		CImgDisplay disp_output = displayImage(imageOutput, bitDepth);
 
 		// Close the input image and output image windows if the ESC key is pressed
 		while (!disp_input.is_closed() && !disp_output.is_closed()
