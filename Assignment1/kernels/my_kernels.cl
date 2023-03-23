@@ -38,7 +38,6 @@ kernel void scan_add(__global const int* A, global int* B, local int* scratch_1,
 		scratch_1 = scratch_3;
 	}
 
-	barrier(CLK_LOCAL_MEM_FENCE);
 	//copying output data to global memory 
 	B[id] = scratch_1[lid];
 }
