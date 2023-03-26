@@ -146,145 +146,166 @@ int main(int argc, char** argv) {
 			throw err;
 		}
 		
-		// making the vectors for the histogram equalisation values
-		std::vector<type> H(bin_num);
-		std::vector<type> CH(bin_num);
-		std::vector<type> L(bin_num);
-		std::vector<unsigned short> BP(imageInput.size());
-		//stores the size of the histogram in bytes 
-		size_t hist_size = H.size() * sizeof(type);
+		std::vector<int> hist_Times;
+		std::vector<int> cum_hist_Times;
+		std::vector<int> LUT_times;
+		std::vector<int> backProj_times;
 
-		//Buffers
-		cl::Buffer dev_image_input(context, CL_MEM_READ_ONLY, imageInput.size() * sizeof(imageInput[0]));
-		cl::Buffer dev_image_output(context, CL_MEM_READ_WRITE, imageInput.size() * sizeof(imageInput[0]));
-		cl::Buffer dev_hist_buffer(context, CL_MEM_READ_WRITE, hist_size);
-		cl::Buffer dev_binSize_buffer(context, CL_MEM_READ_WRITE, sizeof(binSize));
-		cl::Buffer dev_cum_buffer(context, CL_MEM_READ_WRITE, hist_size);
-		cl::Buffer dev_look_buffer(context, CL_MEM_READ_WRITE, hist_size);
-
-		// writing the data to the correct buffer
-		queue.enqueueWriteBuffer(dev_image_input, CL_TRUE, 0, imageInput.size() * sizeof(imageInput[0]), &imageInput.data()[0]);
-		queue.enqueueWriteBuffer(dev_binSize_buffer, CL_TRUE, 0, sizeof(binSize), &binSize);
-
-		/*
-		* --------------- Histogram ---------------
-		*/
-		// initialises the kernel 
-		cl::Kernel Hist = cl::Kernel(program, "hist_simple");
-		//sets the kernel arguments 
-		Hist.setArg(0, dev_image_input);
-		Hist.setArg(1, dev_hist_buffer);
-		Hist.setArg(2, dev_binSize_buffer);
-
-		// sets an event to profile 
-		cl::Event histogramEvent;
-
-		// add it to the queue 
-		queue.enqueueNDRangeKernel(Hist, cl::NullRange, cl::NDRange(imageInput.size()), cl::NullRange, NULL, &histogramEvent);
-		// reads it to the buffer 
-		queue.enqueueReadBuffer(dev_hist_buffer, CL_TRUE, 0, hist_size, &H[0]);
-		// announces compeltetion
-		std::cout << "Hist done" << std::endl;
-
-		/*
-		* --------------- Cum Histogram ---------------
-		*/
-		//cl::Kernel cumHist = cl::Kernel(program, "scan_bl");
-		cl::Kernel cumHist = cl::Kernel(program, "scan_add");
-		cumHist.setArg(0, dev_hist_buffer);
-		cumHist.setArg(1, dev_cum_buffer);
-		// comment out both to switch between the different kernel functions 
-		cumHist.setArg(2, cl::Local(hist_size));
-		cumHist.setArg(3, cl::Local(hist_size));
-
-
-		cl::Event cumHistevent;
-
-		queue.enqueueNDRangeKernel(cumHist, cl::NullRange, cl::NDRange(H.size()), cl::NullRange, NULL, &cumHistevent);
-		queue.enqueueReadBuffer(dev_cum_buffer, CL_TRUE, 0, hist_size, &CH[0]);
-		std::cout << "Cum Hist done" << std::endl;
-
-		/*
-		* --------------- Lookup Table ---------------
-		*/
-		cl::Kernel lookUp = cl::Kernel(program, "lookupTable");
-		lookUp.setArg(0, dev_cum_buffer);
-		lookUp.setArg(1, dev_look_buffer);
-		lookUp.setArg(2, maxDepth);
-		lookUp.setArg(3, bin_num);
-
-		cl::Event lookupEvent;
-
-		queue.enqueueNDRangeKernel(lookUp, cl::NullRange, cl::NDRange(H.size()), cl::NullRange, NULL, &lookupEvent);
-		queue.enqueueReadBuffer(dev_look_buffer, CL_TRUE, 0, hist_size, &L[0]);
-		std::cout << "LUT done" << std::endl;
-
-		/*
-		* --------------- Back Projection ---------------
-		*/
-		cl::Kernel backprojection = cl::Kernel(program, "backprojection");
-		backprojection.setArg(0, dev_image_input);
-		backprojection.setArg(1, dev_look_buffer);
-		backprojection.setArg(2, dev_image_output);
-		backprojection.setArg(3, binSize);
-
-		cl::Event backprojEvent;
-
-		queue.enqueueNDRangeKernel(backprojection, cl::NullRange, cl::NDRange(imageInput.size()), cl::NullRange, NULL, &backprojEvent);
-		queue.enqueueReadBuffer(dev_image_output, CL_TRUE, 0, imageInput.size() * sizeof(imageInput[0]), &BP.data()[0]);
-		std::cout << "back Proj done" << std::endl;
-
-		/*
-		* --------------- Image Creation ---------------
-		*/
-		CImg<imageType> imageOutput(BP.data(), imageInput.width(), imageInput.height(), imageInput.depth(), imageInput.spectrum());
-
-		//RGB Output
-		if (isRGB == true)
+		for (int i = 0; i < 10; i++)
 		{
-			CImg <imageType> RGB_image = imageOutput.get_resize(tempImage.width(), tempImage.height(), tempImage.depth(), tempImage.spectrum());
-			for (int x = 0; x < tempImage.width(); x++) 
+
+			// making the vectors for the histogram equalisation values
+			std::vector<type> H(bin_num);
+			std::vector<type> CH(bin_num);
+			std::vector<type> L(bin_num);
+			std::vector<unsigned short> BP(imageInput.size());
+			//stores the size of the histogram in bytes 
+			size_t hist_size = H.size() * sizeof(type);
+
+			//Buffers
+			cl::Buffer dev_image_input(context, CL_MEM_READ_ONLY, imageInput.size() * sizeof(imageInput[0]));
+			cl::Buffer dev_image_output(context, CL_MEM_READ_WRITE, imageInput.size() * sizeof(imageInput[0]));
+			cl::Buffer dev_hist_buffer(context, CL_MEM_READ_WRITE, hist_size);
+			cl::Buffer dev_binSize_buffer(context, CL_MEM_READ_WRITE, sizeof(binSize));
+			cl::Buffer dev_cum_buffer(context, CL_MEM_READ_WRITE, hist_size);
+			cl::Buffer dev_look_buffer(context, CL_MEM_READ_WRITE, hist_size);
+
+			// writing the data to the correct buffer
+			queue.enqueueWriteBuffer(dev_image_input, CL_TRUE, 0, imageInput.size() * sizeof(imageInput[0]), &imageInput.data()[0]);
+			queue.enqueueWriteBuffer(dev_binSize_buffer, CL_TRUE, 0, sizeof(binSize), &binSize);
+
+			/*
+			* --------------- Histogram ---------------
+			*/
+			// initialises the kernel 
+			cl::Kernel Hist = cl::Kernel(program, "hist_simple");
+			//sets the kernel arguments 
+			Hist.setArg(0, dev_image_input);
+			Hist.setArg(1, dev_hist_buffer);
+			Hist.setArg(2, dev_binSize_buffer);
+
+			// sets an event to profile 
+			cl::Event histogramEvent;
+
+			// add it to the queue 
+			queue.enqueueNDRangeKernel(Hist, cl::NullRange, cl::NDRange(imageInput.size()), cl::NullRange, NULL, &histogramEvent);
+			// reads it to the buffer 
+			queue.enqueueReadBuffer(dev_hist_buffer, CL_TRUE, 0, hist_size, &H[0]);
+			// announces compeltetion
+			std::cout << "Hist done" << std::endl;
+
+			/*
+			* --------------- Cum Histogram ---------------
+			*/
+			//cl::Kernel cumHist = cl::Kernel(program, "scan_bl");
+			cl::Kernel cumHist = cl::Kernel(program, "scan_add_atomic");
+			//cl::Kernel cumHist = cl::Kernel(program, "scan_add");
+			cumHist.setArg(0, dev_hist_buffer);
+			cumHist.setArg(1, dev_cum_buffer);
+			// comment out both to switch between the different kernel functions 
+			//cumHist.setArg(2, cl::Local(hist_size));
+			//cumHist.setArg(3, cl::Local(hist_size));
+
+
+			cl::Event cumHistevent;
+
+			queue.enqueueNDRangeKernel(cumHist, cl::NullRange, cl::NDRange(H.size()), cl::NullRange, NULL, &cumHistevent);
+			queue.enqueueReadBuffer(dev_cum_buffer, CL_TRUE, 0, hist_size, &CH[0]);
+			std::cout << "Cum Hist done" << std::endl;
+
+			/*
+			* --------------- Lookup Table ---------------
+			*/
+			cl::Kernel lookUp = cl::Kernel(program, "lookupTable");
+			lookUp.setArg(0, dev_cum_buffer);
+			lookUp.setArg(1, dev_look_buffer);
+			lookUp.setArg(2, maxDepth);
+			lookUp.setArg(3, bin_num);
+
+			cl::Event lookupEvent;
+
+			queue.enqueueNDRangeKernel(lookUp, cl::NullRange, cl::NDRange(H.size()), cl::NullRange, NULL, &lookupEvent);
+			queue.enqueueReadBuffer(dev_look_buffer, CL_TRUE, 0, hist_size, &L[0]);
+			std::cout << "LUT done" << std::endl;
+
+			/*
+			* --------------- Back Projection ---------------
+			*/
+			cl::Kernel backprojection = cl::Kernel(program, "backprojection");
+			backprojection.setArg(0, dev_image_input);
+			backprojection.setArg(1, dev_look_buffer);
+			backprojection.setArg(2, dev_image_output);
+			backprojection.setArg(3, binSize);
+
+			cl::Event backprojEvent;
+
+			queue.enqueueNDRangeKernel(backprojection, cl::NullRange, cl::NDRange(imageInput.size()), cl::NullRange, NULL, &backprojEvent);
+			queue.enqueueReadBuffer(dev_image_output, CL_TRUE, 0, imageInput.size() * sizeof(imageInput[0]), &BP.data()[0]);
+			std::cout << "back Proj done" << std::endl;
+
+
+			/*
+			* --------------- Image Creation ---------------
+			*/
+			CImg<imageType> imageOutput(BP.data(), imageInput.width(), imageInput.height(), imageInput.depth(), imageInput.spectrum());
+
+			//RGB Output
+			if (isRGB == true)
 			{
-				// adds colour channels back in 
-				for (int y = 0; y < tempImage.height(); y++) 
-				
+				CImg <imageType> RGB_image = imageOutput.get_resize(tempImage.width(), tempImage.height(), tempImage.depth(), tempImage.spectrum());
+				for (int x = 0; x < tempImage.width(); x++)
 				{
-					RGB_image(x, y, 0) = imageOutput(x, y);
-					RGB_image(x, y, 1) = cb(x, y);
-					RGB_image(x, y, 2) = cr(x, y);
+					// adds colour channels back in 
+					for (int y = 0; y < tempImage.height(); y++)
+
+					{
+						RGB_image(x, y, 0) = imageOutput(x, y);
+						RGB_image(x, y, 1) = cb(x, y);
+						RGB_image(x, y, 2) = cr(x, y);
+					}
 				}
+				//converts to RGB
+				imageOutput = RGB_image.get_YCbCrtoRGB();
 			}
-			//converts to RGB
-			imageOutput = RGB_image.get_YCbCrtoRGB();
+
+			/*
+			* --------------- Outputs ---------------
+			*/
+			int histTime = histogramEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - histogramEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>();
+			hist_Times.push_back(histTime);
+			int cumHisttime = cumHistevent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - cumHistevent.getProfilingInfo<CL_PROFILING_COMMAND_START>();
+			cum_hist_Times.push_back(cumHisttime);
+			int lutTime = lookupEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - lookupEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>();
+			LUT_times.push_back(lutTime);
+			int backProj = backprojEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - backprojEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>();
+			backProj_times.push_back(backProj);
+			int overall = histTime + cumHisttime + lutTime + backProj;
+
+			std::cout << std::endl;
+			std::cout << std::endl << H << std::endl;
+			std::cout << "Histogram kernal time (ns):" << histTime << std::endl;
+			std::cout << "Hist Memory transfer:" << GetFullProfilingInfo(histogramEvent, ProfilingResolution::PROF_NS) << std::endl << std::endl;
+
+			std::cout << std::endl << CH << std::endl;
+			std::cout << "Cum Histogram kernal time (ns):" << cumHisttime << std::endl;
+			std::cout << "Cum Hist Memory transfer:" << GetFullProfilingInfo(cumHistevent, ProfilingResolution::PROF_NS) << std::endl << std::endl;
+
+			std::cout << std::endl << L << std::endl;
+			std::cout << "LookUpTable kernal time (ns):" << lutTime << std::endl;
+			std::cout << "LookUpTable Memory transfer:" << GetFullProfilingInfo(lookupEvent, ProfilingResolution::PROF_NS) << std::endl << std::endl;
+
+			std::cout << "Backprojection kernal time (ns):" << backProj << std::endl;
+			std::cout << "Backprojection Memory transfer:" << GetFullProfilingInfo(backprojEvent, ProfilingResolution::PROF_NS) << std::endl << std::endl;
+
+			std::cout << "Overall kernal time (ns):" << overall << std::endl;
+
 		}
 
+		std::cout << "int Hist times " << hist_Times << std::endl;
+		std::cout << "cum Hist times " << cum_hist_Times << std::endl;
+		std::cout << "LUt times " << LUT_times << std::endl;
+		std::cout << "BP times " << backProj_times << std::endl;
 		/*
-		* --------------- Outputs ---------------
-		*/
-		int histTime = histogramEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - histogramEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>();
-		int cumHisttime = cumHistevent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - cumHistevent.getProfilingInfo<CL_PROFILING_COMMAND_START>();
-		int lutTime = lookupEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - lookupEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>();
-		int backProj = backprojEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - backprojEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>();
-		int overall = histTime + cumHisttime + lutTime + backProj;
-
-		std::cout << std::endl;
-		std::cout << std::endl << H << std::endl;
-		std::cout << "Histogram kernal time (ns):" << histTime << std::endl;
-		std::cout << "Hist Memory transfer:" << GetFullProfilingInfo(histogramEvent, ProfilingResolution::PROF_NS) << std::endl << std::endl;
-
-		std::cout << std::endl << CH << std::endl;
-		std::cout << "Cum Histogram kernal time (ns):" << cumHisttime << std::endl;
-		std::cout << "Cum Hist Memory transfer:" << GetFullProfilingInfo(cumHistevent, ProfilingResolution::PROF_NS) << std::endl << std::endl;
-
-		std::cout << std::endl << L << std::endl;
-		std::cout << "LookUpTable kernal time (ns):" << lutTime << std::endl;
-		std::cout << "LookUpTable Memory transfer:" << GetFullProfilingInfo(lookupEvent, ProfilingResolution::PROF_NS) << std::endl << std::endl;
-
-		std::cout << "Backprojection kernal time (ns):" << backProj << std::endl;
-		std::cout << "Backprojection Memory transfer:" << GetFullProfilingInfo(backprojEvent, ProfilingResolution::PROF_NS) << std::endl << std::endl;
-
-		std::cout << "Overall kernal time (ns):" << overall << std::endl;
-
 		// Display the final equalised image
 		CImgDisplay disp_output = displayImage(imageOutput, bitDepth);
 
@@ -295,7 +316,7 @@ int main(int argc, char** argv) {
 			disp_input.wait(1);
 			disp_output.wait(1);
 		}
-
+		*/
 
 	}
 	catch (const cl::Error& err) {
