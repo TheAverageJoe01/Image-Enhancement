@@ -11,6 +11,14 @@ kernel void hist_simple(global const unsigned short* A, global int* B, global co
 	atomic_inc(&B[index]);
 }
 
+//simple exclusive serial scan based on atomic operations - sufficient for small number of elements
+kernel void scan_add_atomic(global int* A, global int* B) {
+    int id = get_global_id(0);
+    int N = get_global_size(0);
+    for (int i = id+1; i < N && id < N; i++)
+        atomic_add(&B[i], A[id]);
+}
+
 // double buffered hillis-steele pattern  
 kernel void scan_add(__global const int* A, global int* B, local int* scratch_1, local int* scratch_2) 
 {

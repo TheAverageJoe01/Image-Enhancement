@@ -42,7 +42,7 @@ int main(int argc, char** argv) {
 	bool isRGB;
 
 	//handle command line options such as device selection, verbosity, etc.
-	for (int i = 1; i < argc; i++) 
+	for (int i = 1; i < argc; i++)
 	{
 		if ((strcmp(argv[i], "-p") == 0) && (i < (argc - 1))) { platform_id = atoi(argv[++i]); }
 		else if ((strcmp(argv[i], "-d") == 0) && (i < (argc - 1))) { device_id = atoi(argv[++i]); }
@@ -145,7 +145,7 @@ int main(int argc, char** argv) {
 			std::cout << "Build Log:\t " << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(context.getInfo<CL_CONTEXT_DEVICES>()[0]) << std::endl;
 			throw err;
 		}
-		
+
 		// making the vectors for the histogram equalisation values
 		std::vector<type> H(bin_num);
 		std::vector<type> CH(bin_num);
@@ -190,12 +190,13 @@ int main(int argc, char** argv) {
 		* --------------- Cum Histogram ---------------
 		*/
 		//cl::Kernel cumHist = cl::Kernel(program, "scan_bl");
-		cl::Kernel cumHist = cl::Kernel(program, "scan_add");
+		cl::Kernel cumHist = cl::Kernel(program, "scan_add_atomic");
+		//cl::Kernel cumHist = cl::Kernel(program, "scan_add");
 		cumHist.setArg(0, dev_hist_buffer);
 		cumHist.setArg(1, dev_cum_buffer);
 		// comment out both to switch between the different kernel functions 
-		cumHist.setArg(2, cl::Local(hist_size));
-		cumHist.setArg(3, cl::Local(hist_size));
+		//cumHist.setArg(2, cl::Local(hist_size));
+		//cumHist.setArg(3, cl::Local(hist_size));
 
 
 		cl::Event cumHistevent;
@@ -243,11 +244,11 @@ int main(int argc, char** argv) {
 		if (isRGB == true)
 		{
 			CImg <imageType> RGB_image = imageOutput.get_resize(tempImage.width(), tempImage.height(), tempImage.depth(), tempImage.spectrum());
-			for (int x = 0; x < tempImage.width(); x++) 
+			for (int x = 0; x < tempImage.width(); x++)
 			{
 				// adds colour channels back in 
-				for (int y = 0; y < tempImage.height(); y++) 
-				
+				for (int y = 0; y < tempImage.height(); y++)
+
 				{
 					RGB_image(x, y, 0) = imageOutput(x, y);
 					RGB_image(x, y, 1) = cb(x, y);
