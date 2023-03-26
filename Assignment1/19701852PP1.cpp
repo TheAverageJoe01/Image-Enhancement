@@ -43,7 +43,8 @@ int main(int argc, char** argv) {
 	bool isRGB;
 
 	//handle command line options such as device selection, verbosity, etc.
-	for (int i = 1; i < argc; i++) {
+	for (int i = 1; i < argc; i++) 
+	{
 		if ((strcmp(argv[i], "-p") == 0) && (i < (argc - 1))) { platform_id = atoi(argv[++i]); }
 		else if ((strcmp(argv[i], "-d") == 0) && (i < (argc - 1))) { device_id = atoi(argv[++i]); }
 		else if (strcmp(argv[i], "-l") == 0) { std::cout << ListPlatformsDevices() << std::endl; }
@@ -263,18 +264,18 @@ int main(int argc, char** argv) {
 		std::cout << std::endl;
 		std::cout << std::endl << H << std::endl;
 		std::cout << "Histogram kernal time (ns):" << histogramEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - histogramEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
-		std::cout << "Hist Memory transfer:" << GetFullProfilingInfo(histogramEvent, ProfilingResolution::PROF_US) << std::endl << std::endl;
+		std::cout << "Hist Memory transfer:" << GetFullProfilingInfo(histogramEvent, ProfilingResolution::PROF_NS) << std::endl << std::endl;
 
 		std::cout << std::endl << CH << std::endl;
 		std::cout << "Cum Histogram kernal time (ns):" << cumHistevent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - cumHistevent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
-		std::cout << "Cum Hist Memory transfer:" << GetFullProfilingInfo(cumHistevent, ProfilingResolution::PROF_US) << std::endl << std::endl;
+		std::cout << "Cum Hist Memory transfer:" << GetFullProfilingInfo(cumHistevent, ProfilingResolution::PROF_NS) << std::endl << std::endl;
 
 		std::cout << std::endl << L << std::endl;
 		std::cout << "LookUpTable kernal time (ns):" << lookupEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - lookupEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
-		std::cout << "LookUpTable Memory transfer:" << GetFullProfilingInfo(lookupEvent, ProfilingResolution::PROF_US) << std::endl << std::endl;
+		std::cout << "LookUpTable Memory transfer:" << GetFullProfilingInfo(lookupEvent, ProfilingResolution::PROF_NS) << std::endl << std::endl;
 
 		std::cout << "Backprojection kernal time (ns):" << backprojEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - backprojEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
-		std::cout << "Backprojection Memory transfer:" << GetFullProfilingInfo(backprojEvent, ProfilingResolution::PROF_US) << std::endl << std::endl;
+		std::cout << "Backprojection Memory transfer:" << GetFullProfilingInfo(backprojEvent, ProfilingResolution::PROF_NS) << std::endl << std::endl;
 
 		std::cout << "Overall kernal time (ns):" << backprojEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - histogramEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
 
