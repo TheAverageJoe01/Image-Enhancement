@@ -21,7 +21,6 @@ CImgDisplay displayImage(CImg<imageType>imageDisplay, int bitDepth)
 	else {
 		CImg<unsigned char> image2 = (CImg<imageType>) imageDisplay;
 		CImgDisplay outputImageDisplay(image2, "8 Bit Image");
-		std::cout << "fuck this module" << std::endl;
 		return outputImageDisplay;
 	}
 }
@@ -39,7 +38,7 @@ void print_help() {
 int main(int argc, char** argv) {
 	int platform_id = 0;
 	int device_id = 0;
-	string imageName = "images/test_large.pgm";
+	string imageName = "images/test.pgm";
 	bool isRGB;
 
 	//handle command line options such as device selection, verbosity, etc.
@@ -146,6 +145,7 @@ int main(int argc, char** argv) {
 			std::cout << "Build Log:\t " << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(context.getInfo<CL_CONTEXT_DEVICES>()[0]) << std::endl;
 			throw err;
 		}
+		
 		// making the vectors for the histogram equalisation values
 		std::vector<type> H(bin_num);
 		std::vector<type> CH(bin_num);
@@ -210,7 +210,7 @@ int main(int argc, char** argv) {
 		cl::Kernel lookUp = cl::Kernel(program, "lookupTable");
 		lookUp.setArg(0, dev_cum_buffer);
 		lookUp.setArg(1, dev_look_buffer);
-		lookUp.setArg(2, maxDepth + 1);
+		lookUp.setArg(2, maxDepth);
 		lookUp.setArg(3, bin_num);
 
 		cl::Event lookupEvent;
@@ -261,23 +261,29 @@ int main(int argc, char** argv) {
 		/*
 		* --------------- Outputs ---------------
 		*/
+		int histTime = histogramEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - histogramEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>();
+		int cumHisttime = cumHistevent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - cumHistevent.getProfilingInfo<CL_PROFILING_COMMAND_START>();
+		int lutTime = lookupEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - lookupEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>();
+		int backProj = backprojEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - backprojEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>();
+		int overall = histTime + cumHisttime + lutTime + backProj;
+
 		std::cout << std::endl;
 		std::cout << std::endl << H << std::endl;
-		std::cout << "Histogram kernal time (ns):" << histogramEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - histogramEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
+		std::cout << "Histogram kernal time (ns):" << histTime << std::endl;
 		std::cout << "Hist Memory transfer:" << GetFullProfilingInfo(histogramEvent, ProfilingResolution::PROF_NS) << std::endl << std::endl;
 
 		std::cout << std::endl << CH << std::endl;
-		std::cout << "Cum Histogram kernal time (ns):" << cumHistevent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - cumHistevent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
+		std::cout << "Cum Histogram kernal time (ns):" << cumHisttime << std::endl;
 		std::cout << "Cum Hist Memory transfer:" << GetFullProfilingInfo(cumHistevent, ProfilingResolution::PROF_NS) << std::endl << std::endl;
 
 		std::cout << std::endl << L << std::endl;
-		std::cout << "LookUpTable kernal time (ns):" << lookupEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - lookupEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
+		std::cout << "LookUpTable kernal time (ns):" << lutTime << std::endl;
 		std::cout << "LookUpTable Memory transfer:" << GetFullProfilingInfo(lookupEvent, ProfilingResolution::PROF_NS) << std::endl << std::endl;
 
-		std::cout << "Backprojection kernal time (ns):" << backprojEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - backprojEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
+		std::cout << "Backprojection kernal time (ns):" << backProj << std::endl;
 		std::cout << "Backprojection Memory transfer:" << GetFullProfilingInfo(backprojEvent, ProfilingResolution::PROF_NS) << std::endl << std::endl;
 
-		std::cout << "Overall kernal time (ns):" << backprojEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() - histogramEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>() << std::endl;
+		std::cout << "Overall kernal time (ns):" << overall << std::endl;
 
 		// Display the final equalised image
 		CImgDisplay disp_output = displayImage(imageOutput, bitDepth);
