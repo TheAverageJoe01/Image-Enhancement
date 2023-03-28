@@ -12,7 +12,8 @@ kernel void hist_simple(global const unsigned short* A, global int* B, global co
 }
 
 //simple exclusive serial scan based on atomic operations - sufficient for small number of elements
-kernel void scan_add_atomic(global int* A, global int* B) {
+kernel void scan_add_atomic(global int* A, global int* B) 
+{
     int id = get_global_id(0);
     int N = get_global_size(0);
     for (int i = id+1; i < N && id < N; i++)
