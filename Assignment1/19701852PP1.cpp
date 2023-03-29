@@ -1,5 +1,5 @@
 // 19701852PPAssignment1.cpp : This file contains the 'main' function. Program execution begins and ends there.
-//
+// Some the code was used from the Parrallel Programming Tutorials 1 and 2 and were implemented into the kernel and cpp files.
 
 #include <iostream>
 #include "CImg.h"
@@ -10,6 +10,7 @@ using namespace cimg_library;
 typedef int type;
 typedef unsigned short imageType;
 
+// function to format the input image properly between 16 and 8 bit
 CImgDisplay displayImage(CImg<imageType>imageDisplay, int bitDepth)
 {
 	if (bitDepth == 16) {
